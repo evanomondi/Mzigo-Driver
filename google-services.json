@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "217514491794",
+    "firebase_url": "https://errands-driver.firebaseio.com",
+    "project_id": "errands-driver",
+    "storage_bucket": "errands-driver.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:217514491794:android:7c0e15ab03bb11722ccb4b",
+        "android_client_info": {
+          "package_name": "com.errands.driver"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "217514491794-hlhpnqc454ef8s2614rfqvfnh5v0110h.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBoaPGSlRzg8KcWsq1Est1iz1VRfIOg7Ms"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "217514491794-hlhpnqc454ef8s2614rfqvfnh5v0110h.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
