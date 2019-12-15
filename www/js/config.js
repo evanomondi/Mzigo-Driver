@@ -2,6 +2,6 @@
 var krms_driver_config ={	
 	'ApiUrl':"https://errandsguy.com/control/api",						
 	'DialogDefaultTitle':"Your Errands App",    
-	'APIHasKey':"pk.eyJ1IjoiZXZhbm9tb25kaSIsImEiOiJjaXJ2MmV5NzcwMGZraGttMTBlaWR0djRhIn0.eoaOYRNwHu3m3KZY3rabfg",
+	'APIHasKey':"fe7709c6106629a1fc4dd32745a0f592",
 	'debug': false
 };
