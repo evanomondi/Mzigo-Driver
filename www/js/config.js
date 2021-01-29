@@ -1,7 +1,7 @@
 /*Kartero App Configuration*/
 var krms_driver_config ={	
-	'ApiUrl':"https://errandsguy.com/control/api",						
-	'DialogDefaultTitle':"Your Errands App",    
-	'APIHasKey':"fe7709c6106629a1fc4dd32745a0f592",
-	'debug': true
+	'ApiUrl':"https://rununu.co.ke/api",						
+	'DialogDefaultTitle':"Rununu, Lets get mobile",    
+	'APIHasKey':"8916B24B73666250E115792FE804191D",
+	'debug': false
 };
