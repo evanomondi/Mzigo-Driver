@@ -1,34 +1,33 @@
 {
   "project_info": {
-    "project_number": "217514491794",
-    "firebase_url": "https://errands-driver.firebaseio.com",
-    "project_id": "errands-driver",
-    "storage_bucket": "errands-driver.appspot.com"
+    "project_number": "191373301917",
+    "project_id": "rununu-3c66a",
+    "storage_bucket": "rununu-3c66a.appspot.com"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:217514491794:android:7c0e15ab03bb11722ccb4b",
+        "mobilesdk_app_id": "1:191373301917:android:50bccf0e5c22ace8c89c74",
         "android_client_info": {
           "package_name": "com.twende.rununu"
         }
       },
       "oauth_client": [
         {
-          "client_id": "217514491794-hlhpnqc454ef8s2614rfqvfnh5v0110h.apps.googleusercontent.com",
+          "client_id": "191373301917-jp1p7snb0b2usv59kduggi0upctqik45.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
       "api_key": [
         {
-          "current_key": "AIzaSyBoaPGSlRzg8KcWsq1Est1iz1VRfIOg7Ms"
+          "current_key": "AIzaSyBNXLPBxCl8NLTlDhfpyFPsoo4QPpQOwoE"
         }
       ],
       "services": {
         "appinvite_service": {
           "other_platform_oauth_client": [
             {
-              "client_id": "217514491794-hlhpnqc454ef8s2614rfqvfnh5v0110h.apps.googleusercontent.com",
+              "client_id": "191373301917-jp1p7snb0b2usv59kduggi0upctqik45.apps.googleusercontent.com",
               "client_type": 3
             }
           ]
