@@ -1,74 +1,52 @@
 function callAjax2(action,params)
 {
-	dump("action=>"+action);	
+	try {
+			
+	dump("callAjax2");
 	
-	if ( !hasConnection() ){
-		toastMsg( getTrans("Not connected to internet",'no_connection') );		
-		return;
-	}
+	params+=getParams();	
 	
-	params+="&lang_id="+getStorage("kr_lang_id");
-	if(!empty(krms_driver_config.APIHasKey)){
-		params+="&api_key="+krms_driver_config.APIHasKey;
-	}		
-	if ( !empty( getStorage("kr_token") )){		
-		params+="&token="+  getStorage("kr_token");
-	}
+    ajax_request2 = $.ajax({
+	  url: ajax_url+"/"+action,
+	  method: "post" ,
+	  data: params ,
+	  dataType: "json",
+	  timeout: ajax_timeout,
+	  crossDomain: true,
+	  beforeSend: function( xhr ) {
+	  	
+	  	 clearTimeout( timer[104] ); 
+	  	
+         if(ajax_request2 != null) {		   
+           ajax_request2.abort();
+		 } else {    				
+			timer[104] = setTimeout(function() {		
+         		if( ajax_request2 != null) {		
+				   ajax_request2.abort();				   
+         		}         		         		
+	        }, ajax_timeout ); 
+		 }
+      }
+    });
 	
-	dump(ajax_url+"/"+action+"?"+params);
+    ajax_request2.done(function( data ) {
+    	//
+    });
 	
-	ajax_request2 = $.ajax({
-		url: ajax_url+"/"+action, 
-		data: params,
-		type: 'post',                  
-		async: false,
-		dataType: 'jsonp',
-		timeout: 6000,
-		crossDomain: true,
-		 beforeSend: function() {
-			if(ajax_request2 != null) {			 	
-			   /*abort ajax*/
-			   hideAllModal();	
-	           ajax_request2.abort();
-			} else {    
-				/*show modal*/			   
-				//loader.show();			    
-			}
-		},
-		complete: function(data) {					
-			//ajax_request2=null;   	     				
-			ajax_request= (function () { return; })();
-			hideAllModal();		
-		},
-		success: function (data) {	
-			if (data.code==1){
-				switch (action)
-				{
-					//silent
-					case "updateDriverLocation":					
-					break;
-					
-					default:
-					break;
-				}
-			}
-		},
-		error: function (request,error) {	        
-		    hideAllModal();					
-			switch (action)
-			{
-				case "GetAppSettings":
-				case "getLanguageSettings":
-				case "registerMobile":
-				case "updateDriverLocation":
-				break;
-															
-				default:				
-				//onsenAlert( getTrans("Network error has occurred please try again!",'network_error') );		
-				break;
-			}
+	ajax_request2.always(function() {        
+        ajax_request2 = null;  
+    });	
+    
+    ajax_request2.fail(function( jqXHR, textStatus ) {    	
+    	$text = !empty(jqXHR.responseText)?jqXHR.responseText:'';
+		if(textStatus!="abort"){
+		   showToast( textStatus + "\n" + $text );             
 		}
-	});
+    });     
+    
+    } catch(err) {
+      showToast(err.message);
+    } 	
 }
 
 function formatTask(data)
@@ -204,7 +182,10 @@ function TaskDetailsChevron_1(data )
 		return '';
 	}
 	var html='';
-	html+='<ons-list-item tappable onclick="viewTaskMap('+data.task_id+', '+ "'" +data.task_lat +"'" +', '+ "'" +data.task_lng +"'" +', '+ "'" + data.delivery_address + "'" + ' )"  >';
+	/*html+='<ons-list-item tappable onclick="viewTaskMap('+data.task_id+', '+ "'" +data.task_lat +"'" +', '+ "'" +data.task_lng +"'" +', '+ "'" + data.delivery_address + "'" + ' )"  >';*/
+	
+	html+='<ons-list-item tappable onclick="mapExternalDirection('+ q(data.task_lat)+ "," + q(data.task_lng) +')"  >';
+	
      html+='<ons-col width="90%" >     ';            
          html+='<div class="table">';
              html+='<div class="col a">';
@@ -851,9 +832,8 @@ function DroffDetails(data)
 	   html+='</ons-list-item>';    
 	    
 		
-	   //setStorage("task_full_data",JSON.stringify(data));
-	   
-		html+='<ons-list-item tappable onclick="viewDropOffMap()"  >';
+	   		
+		html+='<ons-list-item tappable onclick="mapExternalDirection('+ q(data.dropoff_task_lat)+ "," + q(data.dropoff_task_lng) +')"  >';
 	     html+='<ons-col width="90%" >     ';            
 	         html+='<div class="table">';
 	             html+='<div class="col a">';

@@ -8,36 +8,26 @@
     <link rel="stylesheet" href="css/app.css?ver=1.0">
     	
 	
-	<link rel="stylesheet" href="lib/fullcalendar/fullcalendar.css"/>	
-	        
-    <script src="lib/angular/angular.js"></script>
-    <script src="lib/onsen/js/onsenui.js"></script> 
-    <script src="lib/jquery-1.11.3.min.js"></script>
+	<link rel="stylesheet" href="lib/fullcalendar/core/main.css"/>	
+	<link rel="stylesheet" href="lib/fullcalendar/daygrid/main.css"/>	
+	            
+    <script src="lib/onsen/js/onsenui.js"></script>     
+    <script src="lib/jquery-v3.4.1.js"></script>
     <script type="text/javascript" src="cordova.js"></script>
                
     
     <script src="lib/jquery.translate.js"></script>
-    <script src="lib/imagesloaded.pkgd.min.js"></script>
-    <script src="js/jquery.geocomplete.min.js"></script>
+    <script src="lib/imagesloaded.pkgd.min.js"></script>    
     
     <script src="lib/jsignature/jSignature.min.js"></script>   
-    <script src="lib/fullcalendar/moment.min.js"></script>
-    <script src="lib/fullcalendar/fullcalendar.min.js"></script>
+    
+    <script src="lib/moment.js"></script>
+    <script src="lib/fullcalendar/core/main.js"></script>
+    <script src="lib/fullcalendar/daygrid/main.js"></script>
+    
     <script src="lib/validate.min.js"></script>
-    
-    
-    <script src="https://maps.googleapis.com/maps/api/js?v=3.exp&libraries=places&key=AIzaSyA_ubhPB9OzC2NTgIFimZT76TZfg_0CG7E"></script>
-   <script src="lib/gmaps.js?version=1.0.0"></script>
-   
-   <script src="lib/leaflet/leaflet.js"></script>
-   <link href="lib/leaflet/leaflet.css" rel="stylesheet" type="text/css" />
-   
-   <script src="lib/leaflet/plugin/routing/leaflet-routing-machine.min.js"></script>
-   <link href="lib/leaflet/plugin/routing/leaflet-routing-machine.css" rel="stylesheet" type="text/css" />
-    
-    <script src="js/config.js?ver=1.0"></script>
-    <script src="js/kgmaps.js?ver=1.0"></script> 
-    <script src="js/kmapbox.js?ver=1.0"></script> 
+                
+    <script src="js/config.js?ver=1.0"></script>    
     <script src="js/tpl.js?ver=1.0"></script>    
     <script src="js/app.js?ver=1.0"></script>        
              
@@ -82,12 +72,12 @@
        
            <p class="field-wrap">
            <ons-input type="text" name="username"            
-           modifier="underbar" placeholder="Username" data-trn-key="username" float></ons-input>
+           modifier="underbar" class="username_field" placeholder="Username" data-trn-key="username" float></ons-input>
            </p>
                                  
            <p class="field-wrap">
            <ons-input type="password" name="password" modifier="underbar" 
-           placeholder="Password" data-trn-key="password" float ></ons-input>
+           placeholder="Password" data-trn-key="password" float class="password_field" ></ons-input>
            </p>
            
            <p class="text-left">     

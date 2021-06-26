@@ -3,7 +3,7 @@
 var ajax_url= krms_driver_config.ApiUrl ;
 var dialog_title_default= krms_driver_config.DialogDefaultTitle;
 var search_address;
-var ajax_request;
+var ajax_request = [];
 var networkState;
 var reload_home;
 var translator;
@@ -16,12 +16,17 @@ var push;
 var app_running_status;
 
 var device_platform;
-var app_version = "1.4";
-/*var map_bounds;
-var map_marker;
-var map_style = [ {stylers: [ { "saturation":-100 }, { "lightness": 0 }, { "gamma": 1 } ]}];*/
+var app_version = "2.0.0";
 var exit_cout = 0;
 
+var ajax_timeout = 50000;
+var timer = {};
+var ajax_task;
+var $cron_interval = (60*1000);
+var $handle_cron = [];
+var ajax_new_task;
+var reload_completed = 0;
+var map_navigator = 0;
 
 jQuery.fn.exists = function(){return this.length>0;}
 
@@ -29,6 +34,10 @@ function dump(data)
 {
 	console.debug(data);
 }
+
+dump2 = function(data) {
+	alert(JSON.stringify(data));	
+};
 
 function setStorage(key,value)
 {
@@ -75,14 +84,7 @@ function isDebug()
 }
 
 function hasConnection()
-{	
-	if (isDebug()){
-		return true;
-	}
-	var networkState = navigator.connection.type;   
-	if ( networkState=="Connection.NONE" || networkState=="none"){	
-		return false;
-	}	
+{		
 	return true;
 }
 
@@ -98,27 +100,17 @@ document.addEventListener("deviceready", function() {
 		navigator.splashscreen.hide();
 		device_platform = device.platform;
 		app_running_status="active";
-		
-		/*check if background tracking is already on if yes then turn off*/
-		var bg_tracking = getStorage("bg_tracking");	
-		if (!empty(bg_tracking)){
-			if ( bg_tracking==1 || bg_tracking=="1"){
-				/*setTimeout(function() {	    	   
-		    	   BackgroundGeolocation.stop();	    	
-		    	}, 100);*/
-			}
-		}
-		
-	   document.addEventListener("offline", noNetConnection, false);
-	   document.addEventListener("online", hasNetConnection, false);
+				
+	    document.addEventListener("offline", noNetConnection, false);
+	    document.addEventListener("online", hasNetConnection, false);
 	   
-	   document.addEventListener("pause", onBackgroundMode, false);
-       document.addEventListener("resume", onForegroundMode, false);
-	
-       initPush(false);	
-	
+	    document.addEventListener("pause", onBackgroundMode, false);
+        document.addEventListener("resume", onForegroundMode, false);
+        
+        initFirebasex();
+	       	
 	} catch(err) {
-      alert(err.message);
+       //
     } 
 			
 	
@@ -186,8 +178,7 @@ function noNetConnection()
 
 function hasNetConnection()
 {	
-	//toastMsg( getTrans("Connected","connected") );
-	//callAjax("DeviceConnected",'');
+	//
 }
 
 function refreshCon(action , params)
@@ -229,7 +220,9 @@ document.addEventListener("show", function(event) {
 }, false);
 
 document.addEventListener("init", function(event) {
-		 dump( "page init :" + event.target.id );		 
+		 dump( "page init :" + event.target.id );	
+		 dump("init page");
+		 
 		 var page = event.target;
 		 
 		 switch (event.target.id) {		 
@@ -270,37 +263,21 @@ document.addEventListener("init", function(event) {
 			TransLatePage();
 			break;
 			
-			case "pageGetSettings":		
-							
-			if (isDebug()){
-				if ( hasConnection()){
-				    callAjax("GetAppSettings",'');
-				} else {				
-				   toastMsg( getTrans("Not connected to internet","no_connection") );
-				   $(".loading_settings").html( getTrans("Not connected to internet","no_connection") );
-				   $(".refresh_net").show();
-				}	  
-			} else {
-				document.addEventListener("deviceready", function() {	            
-		           if ( hasConnection()){
-				       callAjax("GetAppSettings",'');
-					} else {				
-					   toastMsg( getTrans("Not connected to internet","no_connection") );
-					   $(".loading_settings").html( getTrans("Not connected to internet","no_connection") );
-					   $(".refresh_net").show();
-					}	             
-	            }, false);
-			}
-            
+			case "pageGetSettings":
+			   callAjax("GetAppSettings",'');
 			break;
 			
 			case "page-login":
 			case "pageLogin":
-			if ( isAutoLogin()==1){
+			
+			placeholder(".username_field", "Username", "username");
+			placeholder(".password_field", "Password", "password");
+			
+			/*if ( isAutoLogin()==1){
 				$("#frm-login").hide();
 			    $(".login-header").hide();
 			    $(".auto-login-wrap").show();
-			} 
+			} */
 			TransLatePage();				
 			break;
 			
@@ -327,85 +304,53 @@ document.addEventListener("init", function(event) {
 			
 			case "profilePage":			
 			  TransLatePage();			  
-			  callAjax("GetProfile",'');			  			  
+			  callAjax("GetProfile",'' ,'silent');
 			break;			
 						
 			
 			case "CalendarView":
-			TransLatePage();
-			$('#calendar').fullCalendar({
-				height: 500,
-				header: {
-					left: 'prev',
-					center: 'title',
-					right: 'next'
-				},
-				eventClick: function(calEvent, jsEvent, view) {
-					 //alert('Event: ' + calEvent.id);					 
-				},
-				dayClick: function(date, jsEvent, view) {						 
-					 kNavigator.popPage().then(function() {
-					 	 setStorage('kr_todays_date_raw', date.format() );
-					 	 $(".todays_date").html( date.format('MMM, DD') );
-					 	 $(".todays_date2").html( date.format('MMM, DD') );
-					 	 document.querySelector('ons-tabbar').setActiveTab(0);
-					     getTodayTask('');
-				     });					
-				},
-				events: function (start, end, timezone, callback) {
-					_start  = start.format('YYYY-MM-DD');
-					_end  = end.format('YYYY-MM-DD');
-					params="&start="+_start;
-					params+="&end="+_end;
-					
-					if ( !hasConnection() ){
-		               toastMsg( getTrans("Not connected to internet",'no_connection') );	
-		               return;
-	                }
-					
-					dump(ajax_url+"/CalendarTask/?token=" + getStorage("kr_token") + params);
-					
-					if(!empty(krms_driver_config.APIHasKey)){
-						params+="&api_key="+krms_driver_config.APIHasKey;
-					}		
-					
-				    $.ajax({
-				     	 type: "post",
-				     	  url: ajax_url+"/CalendarTask/?token=" + getStorage("kr_token") + params,
-				     	  dataType: 'jsonp',
-				     	  timeout: 6000,
-				     	  crossDomain: true,
-		                  beforeSend: function() {
-		                  	loader.show();
-		                  },
-				     	  success: function (data) {	
-				     	     hideAllModal();	
-				     	     if ( data.details.length>0){				     	  	  
-					     	  	  var events = [];				     	  	  
-					     	  	  $.each(data.details, function (i, task_day) {				     	  	  	   
-					     	  	  	   events.push({
-						                    /*start: moment({
-						                        year: task_day.year,
-						                        month: task_day.month,
-						                        day: task_day.day
-						                    }),*/
-						                    start : task_day.id,
-						                    title: task_day.title,
-						                    allDay: true,
-						                    id:task_day.id,
-						                    className:"total_task"
-						                });
-					     	  	  });
-					     	  	  callback(events);
-				     	  	  }
-				     	  },
-				     	  error: function (request,error) {	  
-				     	  	  hideAllModal();		 
-				     	  	  dump('errr');  
-				     	  }
-				    });
-				}
-			});
+			  $params = getParamsArray();				  
+			  dump($params);
+			  calendar_height = $("body").height();
+   	          calendar_height = parseInt(calendar_height)-100;   	    
+			  var calendarEl = document.getElementById('calendar');						 		
+			  var calendar = new FullCalendar.Calendar(calendarEl, {
+			  	  height: calendar_height,
+		          plugins: [ 'dayGrid' ],
+		          events: {
+		          	 url: ajax_url+"/CalendarTask/",
+		          	 method: 'POST',
+		          	 extraParams: $params,
+		          	 color: '#2E3B49', 
+		          	 failure: function() {
+				         //toastMsg(  t('error_parsing','there was an error while fetching events!') );
+				     },				     
+		          },	
+		         loading : function(isLoading ){
+				    dump("isLoading=>"+isLoading );
+				    if(isLoading){
+				    	loader.show();	
+				    } else {
+				    	hideAllModal();	
+				    }
+				 }, 	          
+			     eventClick: function(info) {
+			     	$even_date = info.event.start;			     	
+			     	$todays_event_date = moment($even_date).format('YYYY-MM-DD');			     				     	
+			     	setStorage('kr_todays_date_raw', $todays_event_date );
+			     	
+			     	kNavigator.popPage().then(function() {
+			     		document.querySelector('ons-tabbar').setActiveTab(0);
+			     		getTodayTask('');
+			     		
+			     		setTimeout(function(){			     		   
+                           callAjax("getTaskCompleted","date="+$todays_event_date +"&task_type=completed" ,"silent" );	
+			     		}, 300);				     		
+			     		
+			     	});
+			     },
+		      });
+		      calendar.render();
 			break;
 						
 			
@@ -446,6 +391,47 @@ document.addEventListener("init", function(event) {
 			 case "completed_task_list":	
 			   setDuty(2);
 			   $(".todays_date2").html( getStorage("kr_todays_date") );
+			   			   
+			   completedTask();
+               
+               if (!isDebug()){
+		 	      window.plugins.insomnia.keepAwake();
+		 	   }
+		 	                 
+               var pullHook = document.getElementById('pull-hook-completed');
+				pullHook.onAction = function(done) {		
+				  params="date="+ getStorage("kr_todays_date_raw");
+				  var onduty = document.getElementById('onduty').checked==true?1:2 ;	
+				  params+="&onduty="+onduty+"&task_type=completed";
+				  
+				  AjaxTask("getTaskCompleted",params,done);
+				}; 
+				pullHook.addEventListener('changestate', function(event) {
+				  var message = '';
+				   dump(event.state);
+				   switch (event.state) {
+					  case 'initial':
+						message = '<ons-icon size="35px" icon="ion-arrow-down-a"></ons-icon> Pull down to refresh';
+						break;
+					  case 'preaction':
+						message = '<ons-icon size="35px" icon="ion-arrow-up-a"></ons-icon> Release';
+						break;
+					  case 'action':
+						message = '<ons-icon size="35px" spin="true" icon="ion-load-d"></ons-icon> Loading...';
+						break;
+				  }
+				  pullHook.innerHTML = message;
+				});	
+								
+				setTimeout(function(){				   
+				   $handle_cron[1] =  setInterval(function(){runCron('foreGroundLocation')}, $cron_interval );		
+				   $handle_cron[2] =  setInterval(function(){runCron('getNewTask')}, $cron_interval );
+			     }, 100);	 
+               
+				setTimeout(function(){
+		 	      initBackgroundTracking();
+		 	    }, 100);	  
+		 	    
 			 break;
 			 
 			 case "page_map":	
@@ -502,6 +488,29 @@ document.addEventListener("init", function(event) {
 	 		 
 }, false);
 
+
+document.addEventListener('postpop', function(event) {
+	
+	dump("postpop");
+	current_page = document.querySelector('ons-navigator').topPage.id
+	dump("=>"+ current_page);	
+	
+	switch(current_page)
+	{
+		case "home":
+		  dump("reload_home=>"+ reload_home);
+		  if(reload_home==1){
+		  	  reload_home = 0;
+		  	  getTodayTask('');
+		  }
+		  if(reload_completed==1){
+		  	  reload_completed = 0;
+		  	  completedTask();
+		  }
+		break;
+	}
+	
+});
 
 function autoLogin()
 {
@@ -563,55 +572,99 @@ function showPage(page_id, action )
 	kNavigator.pushPage(page_id, options);		
 }
 
-/*mycall*/
-function callAjax(action,params)
-{
-	dump("action=>"+action);	
-	
-	if ( !hasConnection() ){
-		toastMsg( getTrans("Not connected to internet",'no_connection') );	
-		return;
+var getTimeNow = function(){
+	var d = new Date();
+    var n = d.getTime();    
+    n = parseInt(n) + parseInt(d.getMilliseconds());    
+    return n;
+};	
+
+showToast = function(data, modifier) {
+
+  if (empty(data)){
+  	  data=' ';
+  }	  
+  if (empty(modifier)){
+  	  modifier=' ';
+  }	  
+  is_animation = '';
+  
+  if(modifier=="danger"){
+  	is_animation='fall';
+  }
+    
+  toast_handler  = ons.notification.toast(data, {
+     timeout: 2500, //
+     animation: is_animation ,
+     modifier: modifier+ ' thick',
+  });
+   
+};
+
+setLoader = function($loader_type){
+	switch($loader_type)
+	{
+		case "silent":
+		  //
+		break;
+		
+		default:
+		  loader.show();
+		break;
 	}
-	
-	params+=getParams();
-	
-	dump(ajax_url+"/"+action+"?"+params);
-	
-	ajax_request = $.ajax({
-		url: ajax_url+"/"+action, 
-		data: params,
-		type: 'post',                  
-		async: false,
-		dataType: 'jsonp',
-		timeout: 6000,
-		crossDomain: true,
-		 beforeSend: function() {
-			if(ajax_request != null) {			 	
-			   /*abort ajax*/
+};
+
+/*mycall*/
+function callAjax(action, params , loader_type)
+{
+	try {
+		
+		$loader_type = '';
+		if ((typeof loader_type !== "undefined") && ( loader_type !== null)) {
+			$loader_type = loader_type;
+		}
+				
+		timenow = getTimeNow();		
+		params+=getParams();
+		
+		ajax_request[timenow] = $.ajax({
+		  url: ajax_url+"/"+action,
+		  method: "post" ,
+		  data: params ,
+		  dataType: "json",
+		  timeout: ajax_timeout,
+		  crossDomain: true,
+		  beforeSend: function( xhr ) {
+		  	
+		  	  clearTimeout( timer[timenow] ); 
+		  	
+	         if(ajax_request[timenow] != null) {			 				   
 			   hideAllModal();	
-	           ajax_request.abort();
-			} else {    
-				/*show modal*/			   
-				loader.show();			    
-			}
-		},
-		complete: function(data) {					
-			//ajax_request=null;   	
-			ajax_request= (function () { return; })();     				
-			hideAllModal();		
-		},
-		success: function (data) {	
-			
-			dump(data);
-		   	if (data.code==1){
-		   		
-		   		switch(action)
+	           ajax_request[timenow].abort();
+			 } else {    			
+			 				 				 				
+				setLoader($loader_type);
+	
+				timer[timenow] = setTimeout(function() {		
+	         		if( ajax_request[timenow] != null) {		
+					   ajax_request[timenow].abort();
+					   hideAllModal();	
+	         		}         		         		
+		        }, ajax_timeout ); 
+						
+			 }
+	      }
+	    });
+	    
+	    ajax_request[timenow].done(function( data ) {
+	    	dump(data);
+	    	if (data.code==1){
+	    		
+	    		switch(action)
 		   		{
 		   			case "login":		
 		   			dump('LOGIN OK');  
-		   			
-		   			checkDeviceRegister();
-		   			
+		   					   			
 		   			setStorage("kr_username", data.details.username);
 		   			setStorage("kr_password", data.details.password);
 		   			setStorage("kr_remember", data.details.remember);
@@ -623,15 +676,17 @@ function callAjax(action,params)
 		   			setStorage("device_vibration", data.details.device_vibration);		   			
 		   			
 		   			setStorage("app_disabled_bg_tracking", data.details.app_disabled_bg_tracking);
-		   			setStorage("app_track_interval", data.details.app_track_interval);
-		   			
+		   			setStorage("app_track_interval", data.details.app_track_interval);		   			
 		   			
 		   			setStorage("kr_on_duty", data.details.on_duty);
 		   			
-		   			setTimeout(function(){ 
-		   				initBackgroundTracking();
-		   			}, 100);
-		   					   					   			
+		   			
+                    setStorage("topic_new_task", data.details.topic_new_task);
+		   			setStorage("topic_alert", data.details.topic_alert);
+                          
+		   			initSubscribe(data.details.enabled_push);
+		   			
+		   					   	
 					kNavigator.resetToPage("home.html", {
 					  animation: 'slide',					  
 					});
@@ -701,10 +756,12 @@ function callAjax(action,params)
 		   			  if ( data.details.reload_functions =="TaskDetails"){
 		   			  	   callAjax("TaskDetails",'task_id=' + data.details.task_id );
 		   			  }
+		   			  
 		   			  if ( data.details.reload_functions=="getTodayTask"){
+		   			  	   reload_completed = 1;
 		   			  	   kNavigator.popPage().then(function() {
-							    getTodayTask('');
-						   })
+							    //
+						   });
 		   			  }
 		   			  
 		   			  $("#task-action-wrap").html( 
@@ -762,21 +819,17 @@ function callAjax(action,params)
 		   			  $("#transport-list").html(  html );
 		   			break;
 		   			
-		   			case "ProfileChangePassword":
+		   			case "ProfileChangePassword":		   			  
 		   			  setStorage("kr_password", data.details);
-		   			  onsenAlert( data.msg );   
+		   			  showToast( data.msg , 'success');   
 		   			break;
 		   			
 		   			//silent		   			
 		   			case "DeviceConnected":		   			
 		   			break;
 		   			
-		   			case "SettingPush":
-		   			  if ( data.details.enabled_push==1){			   			  	  
-		   			  	 checkDeviceRegister();
-		   			  } else {
-		   			  	 pushUnregister();
-		   			  }
+		   			case "SettingPush":		   			  
+		   			  initSubscribe( data.details.enabled_push );
 		   			break;
 		   			
 		   			case "GetSettings":
@@ -806,8 +859,7 @@ function callAjax(action,params)
 		   			break;
 		   			
 		   			case "GetAppSettings":
-		   			   dump('GetAppSettings');		 		   			   
-		   			   
+		   					   			   
 		   			   setStorage("kr_translation",JSON.stringify(data.details.translation));		   			   
 		   			   //set sounds url
 		   			   setStorage("notification_sound_url",data.details.notification_sound_url);
@@ -830,33 +882,37 @@ function callAjax(action,params)
 		   			   
 		   			   dump( "FINAL languae id : " + getStorage("kr_lang_id") );
 		   			   
-		   			   var auto_login = isAutoLogin();
-	                   
-	                   if ( auto_login == 1) {	       
-	                   	   dump('execute auto login');   	                   	   
-	                   	   kNavigator.resetToPage("pagelogin.html", {
-							  animation: 'fade',
-							   callback: function(){		
-							   	  var kr_username=getStorage("kr_username");
-		                          var kr_password=getStorage("kr_password");
-		                          var kr_remember=getStorage("kr_remember");							  	  
-							  	  var params="username="+kr_username+"&password="+kr_password;
-							  	  params+="&remember="+kr_remember;
-							  	  
-							  	  params+="&device_id="+ getStorage("device_id");
-	                              params+="&device_platform="+ device_platform;
-							  	  
-							  	  dump(params);
-			                      callAjax("login",params);
-							  } 
-						   });
-	                   } else {
-	                   	   kNavigator.resetToPage("pagelogin.html", {
+		   			   $valid_token = false;
+		   			   if ((typeof data.details.valid_token !== "undefined") && ( data.details.valid_token !== null)) {	
+		   			   	   $valid_token = data.details.valid_token;
+		   			   }
+
+		   			   if($valid_token){
+		   			   	  setStorage("kr_todays_date", data.details.todays_date);
+                          setStorage("kr_todays_date_raw", data.details.todays_date_raw);
+                          setStorage("kr_token", data.details.token);
+                          setStorage("kr_location_accuracy", data.details.location_accuracy);
+                          setStorage("device_vibration", data.details.device_vibration);		   			
+                          setStorage("app_disabled_bg_tracking", data.details.app_disabled_bg_tracking);
+                          setStorage("app_track_interval", data.details.app_track_interval);
+                          setStorage("kr_on_duty", data.details.on_duty);
+                          
+                          setStorage("topic_new_task", data.details.topic_new_task);
+		   			      setStorage("topic_alert", data.details.topic_alert);
+                          
+		   			      initSubscribe(data.details.enabled_push);
+                          
+                          kNavigator.resetToPage("home.html", {
+						    animation: 'slide',					  
+						  }); 
+						                         
+		   			   } else {		   			   
+		   			       kNavigator.resetToPage("pagelogin.html", {
 							  animation: 'fade',
 							  callback: function(){						  	  
 							  } 
 						   });
-	                   }
+		   			   }
 	                   
 		   			break;
 		   			
@@ -937,65 +993,34 @@ function callAjax(action,params)
 		   			break;
 		   			
 		   			case "getTaskCompleted":
-		   			  $("#task_completed").html( formatTask( data.details ) ); 		
-
-		   			  var pullHook = document.getElementById('pull-hook-completed');
-					  pullHook.onAction = function(done) {		
-					 	  params="date="+ getStorage("kr_todays_date_raw");
-					 	  var onduty = document.getElementById('onduty').checked==true?1:2 ;	
-					 	  params+="&onduty="+onduty+"&task_type=completed";
-					 	  
-			              AjaxTask("getTaskCompleted",params,done);
-		              }; 
-					  pullHook.addEventListener('changestate', function(event) {
-					 	  var message = '';
-					 	   dump(event.state);
-					 	   switch (event.state) {
-						      case 'initial':
-						        message = '<ons-icon size="35px" icon="ion-arrow-down-a"></ons-icon> Pull down to refresh';
-						        break;
-						      case 'preaction':
-						        message = '<ons-icon size="35px" icon="ion-arrow-up-a"></ons-icon> Release';
-						        break;
-						      case 'action':
-						        message = '<ons-icon size="35px" spin="true" icon="ion-load-d"></ons-icon> Loading...';
-						        break;
-					      }
-					      pullHook.innerHTML = message;
-					  });
-		   			  	   			  
+		   			  $("#task_completed").html( formatTask( data.details ) ); 			   			 
 		   			break;
 		   			
-		   			default:
-		   			 toastMsg( data.msg );
+		   			case "ChangePassword":
+		   			  document.getElementById('dialogChangePass').hide();
+		   			  showToast( data.msg ,'success');  
+		   			break;
+		   			
+		   			default:		   			 
+		   			 showToast( data.msg ,'success');
 		   			break;
 		   		}
-		   		
-		   	} else { // failed 
-		   		
-		   		switch (action)
+	    		
+	    	} else {
+	    		// FAILED CONDITION
+	    		
+	    		switch (action)
 		   		{
 		   			
-		   			case "getTaskCompleted":
-		   			   toastMsg( data.msg );
+		   			case "getTaskCompleted":		   			   
 		   			   $("#task_completed").html(''); 		
 		   			break;
 		   			
 		   			case "getTaskByDate":		   			  
 		   			  $(".no-task-wrap").show();
 		   			  $(".no-task-wrap p").html( data.msg );
-		   			  $("#task-wrapper").html('');
-		   			  //$("#task-wrapper").hide();
-		   			  toastMsg( data.msg );
-		   			break;
-
-		   			case "login":
-		   			checkGPS();		   			   		
-		   			$("#frm-login").show();
-			        $(".login-header").show();
-			        $(".auto-login-wrap").hide();
-		   			onsenAlert( data.msg );
-		   			removeStorage("kr_remember");
+		   			  $("#task-wrapper").html('');		   			  
+		   			  showToast( data.msg ,'danger' );
 		   			break;
 		   			
 		   			//silent		   			
@@ -1007,16 +1032,13 @@ function callAjax(action,params)
 		   					   			
 		   			case "GetNotifications":
 		   			clearPushCount();
-		   			toastMsg( data.msg );
+		   			showToast( data.msg , 'danger' );
 		   			TransLatePage();
 		   			break;
 		   			
 		   			case "changeTaskStatus":		   			
 		   			  reload_home=1;
-		   			  toastMsg( data.msg );
-		   			  kNavigator.popPage().then(function() {
-		                 reloadHome();		    		   
-	                  });	   
+		   			  toastMsg( data.msg );		   			  
 		   			break;
 		   			
 		   			case "loadNotes":
@@ -1034,97 +1056,103 @@ function callAjax(action,params)
 		   			break;
 		   				
 		   			default:		   			
-		   			 toastMsg( data.msg );
+		   			 showToast( data.msg , 'danger' );
 		   			break;
 		   		}
-		   	}
-		},
-		error: function (request,error) {	        
-		    hideAllModal();					
-			switch (action)
-			{
-				case "GetAppSettings":
-				case "getLanguageSettings":
-				case "registerMobile":
-				break;
-												
-				default:
-				toastMsg( getTrans("Network error has occurred please try again!",'network_error') );		
-				break;
-			}
-		}
-	});
+	    		
+	    	} /*END CODE = 1*/
+	    });
+	    /*AJAX DONE*/
+	    
+	    /*ALWAYS*/
+	    ajax_request[timenow].always(function() {
+	        dump("ajax always");
+	        hideAllModal();	
+	        clearTimeout( timer[timenow] );
+	        ajax_request[timenow]=null;          
+	    });
+	          
+	    /*FAIL*/
+	    ajax_request[timenow].fail(function( jqXHR, textStatus ) {   
+	    	clearTimeout( timer[timenow] ); 	
+	    	$text = !empty(jqXHR.responseText)?jqXHR.responseText:'';
+	    	if(textStatus!="abort"){
+	    	   showToast( textStatus + "\n" + $text );             
+	    	}
+	    });     	    
+		
+	} catch(err) {
+       showToast(err.message);
+    } 
 }
 
 function AjaxTask(action, params , done)
-{
-	dump('AjaxTask');
-	if ( !hasConnection() ){
-		toastMsg( getTrans("Not connected to internet","no_connection") );
-		done();
-		return;
-	}
-
-	params+="&lang_id="+getStorage("kr_lang_id");
-	if(!empty(krms_driver_config.APIHasKey)){
-		params+="&api_key="+krms_driver_config.APIHasKey;
-	}		
-	if ( !empty( getStorage("kr_token") )){		
-		params+="&token="+  getStorage("kr_token");
-	}
+{	
+	try {
+	dump('AjaxTask =>' + action);	
+	params+=getParams();			
 	
-	dump(ajax_url+"/"+action+"?"+params);
+    ajax_task = $.ajax({
+	  url: ajax_url+"/"+action,
+	  method: "post" ,
+	  data: params ,
+	  dataType: "json",
+	  timeout: ajax_timeout,
+	  crossDomain: true,
+	  beforeSend: function( xhr ) {
+	  	
+	  	 clearTimeout( timer[100] ); 
+	  	
+         if(ajax_task != null) {			 				   		   
+           ajax_task.abort();
+		 } else {   		 			
+		 	timer[100] = setTimeout(function() {		
+         		if( ajax_task != null) {		
+				   ajax_task.abort();				   
+         		}         		         		
+	        }, ajax_timeout ); 		 	
+		 }
+      }
+    });
 	
-	ajax_request = $.ajax({
-		url: ajax_url+"/"+action, 
-		data: params,
-		type: 'post',                  
-		async: false,
-		dataType: 'jsonp',
-		timeout: 6000,
-		crossDomain: true,
-		 beforeSend: function() {
-			if(ajax_request != null) {			 				   
-	           ajax_request.abort();
-			} else {    
-			}
-		},
-		complete: function(data) {					
-			ajax_request=null;   	     							
-		},
-		success: function (data) {	
-			dump(data);
-			done();
-			
-			if ( action=="getTaskCompleted"){
-				if ( data.code==1){										
-			   	    $("#task_completed").html( formatTask( data.details ) );		   			
-					
-				} else {						   			
-		   		    $("#task_completed").html(''); 
-		   		    toastMsg( data.msg );			
-				}
-			} else {
-				if ( data.code==1){										
-			   	    $("#task-wrapper").html( formatTask( data.details ) );		   			
-					
-				} else {						   		
-		   		    $("#task-wrapper").html(''); 
-		   		    toastMsg( data.msg );			
-				}
-			}
-		},
-		error: function (request,error) {	  		    
-			done();
+    ajax_task.done(function( data ) {
+    	if(!empty(done)){
+    	   done();
+    	}
+    	
+    	$target = action=="GetTaskByDate"?"task-wrapper":"task_completed";
+    	dump("target=>"+$target);
+    	
+    	if ( data.code==1){	    	
+    		if(!empty(data.details.data)){
+   			   $("#"+ $target).html( formatTask( data.details.data ) );  	   			   
+   			} else {
+   			   $("#"+ $target).html( formatTask( data.details ) );  
+   			}		    			
+		} else {				   			
+			$("#"+ $target).html(''); 
+			showToast( data.msg ,'danger');			
 		}
-	});
+    });
 	
+	ajax_task.always(function() {        
+        ajax_task = null;  
+        if ((typeof  done !== "undefined") && ( done !== null)) {
+            done();
+        }
+    });	   
+    
+    ajax_task.fail(function( jqXHR, textStatus ) {    	    	
+    	$text = !empty(jqXHR.responseText)?jqXHR.responseText:'';
+		if(textStatus!="abort"){
+		   showToast( textStatus + "\n" + $text );             
+		}    	
+    });     
+	
+    } catch(err) {
+      showToast(err.message);
+    } 	
 }
-
-/*function getTrans(words,words_key)
-{
-	
-}*/
 
 function onsenAlert(message,dialog_title)
 {
@@ -1139,26 +1167,7 @@ function onsenAlert(message,dialog_title)
 
 function toastMsg( message )
 {	
-	
-	if (isDebug()){
-		onsenAlert( message );
-		return ;
-	}
-	 
-    window.plugins.toast.showWithOptions(
-      {
-        message: message ,
-        duration: "long",
-        position: "bottom",
-        addPixelsY: -40 
-      },
-      function(args) {
-      	
-      },
-      function(error) {
-      	onsenAlert( message );
-      }
-    );
+	showToast(message);
 }
 
 function hideAllModal()
@@ -1393,7 +1402,7 @@ function reloadHome()
 	dump('reloadHome');
 	dump(reload_home);
 	if ( reload_home==1){
-	   getTodayTask('');
+	   getTodayTask('');	  
 	}
 }
 
@@ -1565,10 +1574,8 @@ function UpdatePush()
 	dump('UpdatePush');
 	var enabled_push = document.getElementById('enabled_push').checked==true?1:2 ;	
 	params="enabled_push="+enabled_push;
-	//if ( switch_handle==2){
-	   callAjax("SettingPush",params);
-	   switch_handle=0;
-	//}
+	callAjax("SettingPush",params);
+	switch_handle=0;
 }
 
 
@@ -1615,6 +1622,8 @@ function Logout()
 	    	 animation: 'none',
 	    	 callback: function(){    	 	
 	    	 	navigator.geolocation.clearWatch(watchID);
+	    	 	clearInterval($handle_cron[1]);
+	            clearInterval($handle_cron[2]);
 	    	    callAjax("Logout",'');
 	    	 }
 			});
@@ -1759,14 +1768,7 @@ function checkGPS()
 	 if (isDebug()){
 		return ;
 	 }
-	 	 
-	 /*if ( device.platform =="iOS"){	 	 	 	 
-	 	 getCurrentPosition();
-	 	 return;
-	 }	 
-     cordova.plugins.locationAccuracy.request( onRequestSuccess, 
-	 onRequestFailure, cordova.plugins.locationAccuracy.REQUEST_PRIORITY_HIGH_ACCURACY);*/
-	 
+	 	 	 
 	  if ( device.platform =="iOS"){
 	 	
 	 	cordova.plugins.diagnostic.isLocationAuthorized(function(authorized){
@@ -1844,16 +1846,15 @@ function checkGPS()
 
 function onRequestSuccess(success){
     //alert("Successfully requested accuracy: "+success.message);
-    getCurrentPosition();
+    //getCurrentPosition();
 }
 
-function onRequestFailure(error){
-    //alert("Accuracy request failed: error code="+error.code+"; error message="+error.message);    
+function onRequestFailure(error){    
     if(error.code == 4){
-    	toastMsg( getTrans("You have choosen not to turn on location accuracy",'turn_off_location') );
+    	showToast( getTrans("You have choosen not to turn on location accuracy",'turn_off_location') ,'danger' );
     	checkGPS();
     } else {
-    	toastMsg( error.message );
+    	showToast( error.message ,'danger' );
     }
 }
 
@@ -2111,56 +2112,58 @@ function stopNotification()
 
 function AjaxNotification(action, params , done)
 {
+	try {
 	dump('AjaxNotification');
-	if ( !hasConnection() ){
-		toastMsg( getTrans("Not connected to internet","no_connection") );
-		done();
-		return;
-	}
-
-	params+="&lang_id="+getStorage("kr_lang_id");
-	if(!empty(krms_driver_config.APIHasKey)){
-		params+="&api_key="+krms_driver_config.APIHasKey;
-	}		
-	if ( !empty( getStorage("kr_token") )){		
-		params+="&token="+  getStorage("kr_token");
-	}
 	
-	dump(ajax_url+"/"+action+"?"+params);
-	
+	params+=getParams();
+		
 	ajax_request3 = $.ajax({
-		url: ajax_url+"/"+action, 
-		data: params,
-		type: 'post',                  
-		async: false,
-		dataType: 'jsonp',
-		timeout: 6000,
-		crossDomain: true,
-		 beforeSend: function() {
-			if(ajax_request != null) {			 				   
-	           ajax_request3.abort();
-			} else {    
-			}
-		},
-		complete: function(data) {					
-			//ajax_request3=null;   	     							
-			ajax_request3 = (function () { return; })();    
-		},
-		success: function (data) {	
-			dump(data);
-			done();
-			if ( data.code==1){		
-				$("#notifications-details").html( formatNotifications( data.details ) );		
-			} else {		
-				$("#notifications-details").html('');	
-				toastMsg( data.msg );		   					
-			}
-		},
-		error: function (request,error) {	  		    
-			done();
+	  url: ajax_url+"/"+action,
+	  method: "post" ,
+	  data: params ,
+	  dataType: "json",
+	  timeout: ajax_timeout,
+	  crossDomain: true,
+	  beforeSend: function( xhr ) {
+	  	
+	  	 clearTimeout( timer[101] );
+	  	 
+         if(ajax_request3 != null) {			 				   		   
+           ajax_request3.abort();
+		 } else {    				
+			timer[101] = setTimeout(function() {		
+         		if( ajax_request3 != null) {		
+				   ajax_request3.abort();				   
+         		}         		         		
+	        }, ajax_timeout ); 		 	
+		 }
+      }
+    });
+    
+    ajax_request3.done(function( data ) {
+    	done();
+    	if ( data.code==1){		
+			$("#notifications-details").html( formatNotifications( data.details ) );		
+		} else {		
+			$("#notifications-details").html('');	
+			showToast( data.msg ,'danger');		   					
 		}
-	});
+    });
 	
+	ajax_request3.always(function() {        
+        ajax_request3 = null;  
+    });	   
+    
+    ajax_request3.fail(function( jqXHR, textStatus ) {    	
+    	$text = !empty(jqXHR.responseText)?jqXHR.responseText:'';
+		if(textStatus!="abort"){
+		   showToast( textStatus + "\n" + $text );             
+		}
+    });     
+    
+    } catch(err) {
+      showToast(err.message);
+    } 	
 }
 
 function getLocationAccuracy()
@@ -2282,6 +2285,8 @@ function showCemara()
 		return;
 	}
 	
+	map_navigator = 1;
+	
 	var cam_options = {
 		destinationType: Camera.DestinationType.FILE_URI,
 	    sourceType: Camera.PictureSourceType.CAMERA,
@@ -2301,19 +2306,7 @@ function showCemara()
 			};
 		}
 	}
-		
-	/*navigator.camera.getPicture(uploadTaskPhoto, function(){
-		toastMsg( getTrans("Get photo failed","get_photo_failed") );
-	},{
-	    destinationType: Camera.DestinationType.FILE_URI,
-	    sourceType: Camera.PictureSourceType.CAMERA,
-	    popoverOptions: new CameraPopoverOptions(300, 300, 100, 100, Camera.PopoverArrowDirection.ARROW_ANY),
-	    targetHeight:100,
-		targetWidth:100
-    });*/
-		
-	//alert(JSON.stringify(cam_options));
-	
+				
 	navigator.camera.getPicture(uploadTaskPhoto, function(){
 		toastMsg( getTrans("Get photo failed","get_photo_failed") );
 	}, cam_options );
@@ -2418,15 +2411,15 @@ function showDeviceGallery(action_type)
 	*/
 			
 	if(isDebug()){
+		var dialog = document.getElementById('addphotoSelection');
+	    dialog.hide();
+	    
 		uploadLoader.show();
 		$(".bytes_send").html("10%");		
 		setTimeout(function(){
 			uploadLoader.hide();
 			$("#progress_bar").attr("value",0);
-			$(".bytes_send").html("0%");
-			
-			var dialog = document.getElementById('addphotoSelection');
-	        dialog.hide();
+			$(".bytes_send").html("0%");						
 	    
 		 }, 3000);	
 		return;
@@ -2437,6 +2430,8 @@ function showDeviceGallery(action_type)
 	{
 		case 1:
 		case "1":
+		
+		map_navigator = 1;
 		
 		navigator.camera.getPicture(uploadPhoto, function(){
 			toastMsg( getTrans("Get photo failed","get_photo_failed") );
@@ -2451,6 +2446,8 @@ function showDeviceGallery(action_type)
 		
 		case 2:
 		case "2":
+		
+		map_navigator = 1;
 		
 		var dialog = document.getElementById('addphotoSelection');
 	    dialog.hide();
@@ -2882,7 +2879,9 @@ function deletePhoto(id)
 /*Location tracking in background*/
 
 function onBackgroundMode() {        	
-	app_running_status="background";			
+	app_running_status="background";	
+	clearInterval($handle_cron[1]);
+	clearInterval($handle_cron[2]);
 }
 
 function onForegroundMode()
@@ -2891,13 +2890,25 @@ function onForegroundMode()
 		
 		dump('onForegroundMode');
 			
+		map_navigator=0;
 		app_running_status="active";	
 		setStorage("bg_tracking",2);
 		checkGPS();	
+		
+		setTimeout(function(){
+		   $handle_cron[1] =  setInterval(function(){runCron('foreGroundLocation')}, $cron_interval );		
+		   $handle_cron[2] =  setInterval(function(){runCron('getNewTask')}, $cron_interval );
+	     }, 100);	 
 								
-		push.setApplicationIconBadgeNumber(function() {		    
-		}, function() {		    
-		}, 0);
+	     
+	    if(cordova.platformId == "ios"){
+			window.FirebasePlugin.getBadgeNumber(function(n) {		   	       
+		       total_badge = parseInt(n);	       
+		       if(total_badge>0){
+		       	   window.FirebasePlugin.setBadgeNumber(0);
+		       }
+		    });
+		}		
 		
 	} catch(err) {
        toastMsg(err.message);       
@@ -2916,82 +2927,6 @@ function iOSeleven()
 	return false;
 }
 
-
-/*1.4*/
-initPush = function(re_init){
-	
-	try {
-		
-			push = PushNotification.init({
-				android: {
-					sound : "true",
-					clearBadge : "true",
-					vibrate : "true"
-				},
-			    browser: {
-			        pushServiceURL: 'http://push.api.phonegap.com/v1/push'
-			    },
-				ios: {
-					alert: "true",
-					badge: "true",
-					sound: "true",
-					clearBadge:"true"
-				},
-				windows: {}
-		    });
-	    
-	     push.on('registration', function(data) {   	  	
-	    	/*CHECK IF SAME DEVICE ID*/	    	
-	    	if(re_init){	    		
-		    	old_device_id = getStorage("device_id");
-		    	dump(old_device_id +"=>" + data.registrationId );
-	    		if (old_device_id!=data.registrationId){	    			
-	    			sendPost('reRegisterDevice', "new_device_id="+ data.registrationId);
-	    		}
-	    	} else {	    		
-	    	   setStorage("device_id", data.registrationId ); 	
-	    	}	    	 
-		});
-		
-		 push.on('notification', function(data){     	   	   
-		 	
-		   if ( data.additionalData.foreground ){
-	    		playSound();
-	    		
-	    		var vibrate_interval=getStorage("device_vibration");
-		     	if (empty(vibrate_interval)){
-		     	 	vibrate_interval=3000;
-		     	} 
-		     			     	 
-		     	vibrate_interval=parseInt(vibrate_interval)+1;	
-		     	navigator.vibrate(vibrate_interval);		     		    	
-	       } 
-	                       	  
-	       handleNotification(data);
-	       
-	    });
-	    
-	    PushNotification.createChannel(function(){
-	    	//alert('create channel succces');
-	    }, function(){
-	    	//alert('create channel failed');
-	    },{
-	    	 id: 'kartero',
-	         description: 'kartero app channel',
-	         importance: 5,
-	         vibration: true,
-	         sound : 'beep'
-	      }
-	    );
-	    
-	    push.on('error', function(e) {      
-	     	 alert(e.message);
-		});
-		
-	} catch(err) {
-       alert(err.message);
-    } 
-};
 
 playSound = function(){		 
 	 try {	 		 	 
@@ -3018,46 +2953,8 @@ playSound = function(){
     } 
 };
 
-handleNotification = function(data){
-	//alert(JSON.stringify(data)); 
-	setBaloon();
-	
-	push_actions='';
-	
-	if ( device.platform =="iOS"){
-		$.each( data.additionalData, function( key, data ) {	  	 	
-	  	 	if (key=="gcm.notification.actions"){
-	  	 		push_actions = data;
-	  	 	}
-	  	 });
-	} else {		
-		push_actions = data.additionalData.actions;	   
-	}	
-		
-	
-	switch ( push_actions ){
-	    	
-		case "ASSIGN_TASK":
-  	 	case "CANCEL_TASK":
-  	 	case "UPDATE_TASK":
-	  	 	toastMsg( data.message );
-	  	 	
-	  	 	current_page = kNavigator.topPage.id;	  	 	 	 	
-	  	 	if(current_page=="home"){
-	  	 		 setTimeout(function(){ 	  	 		 	
-	  	 		 	document.querySelector('ons-tabbar').setActiveTab(0);
-	  	 		 	getTodayTask('');
-	  	 		 }, 1000);
-	  	 	} else {
-	  	 		reload_home = 1;
-	  	 	} 	  	 	  
-  	 	break;
-  	 	  	 	
-  	 	default:
-  	 	  toastMsg( data.message ); 	  	 	
-  	 	break;
-    }
-	
+handleNotification = function(data){	
+	//setBaloon();		
 };
 
 getParams = function(){
@@ -3077,7 +2974,11 @@ getParams = function(){
 		params+="&token="+  getStorage("kr_token");
 	}
 		
-	params+="&device_platform=" + device_platform;
+	if( isDebug() ){
+	   params+="&device_platform=" + device_platform;
+	} else {
+	   params+="&device_platform=" + cordova.platformId;
+	}
 	
 	device_id = getStorage("device_id");
 	if(!empty(device_id)){
@@ -3089,33 +2990,6 @@ getParams = function(){
 	return params;
 };
 
-pushUnregister = function(){
-	dump("pushUnregister");
-	try {	
-		push.unregister(function(){			
-			dump('unregister ok');
-			setStorage("push_unregister",1);
-		},function(error) {   	   	   	   	   
-			dump('unregister error');
-	    });		
-		
-	} catch(err) {
-       alert(err.message);       
-    } 
-};
-
-checkDeviceRegister = function(){	
-	push_unregister = getStorage("push_unregister");
-	dump("push_unregister => "+ push_unregister);
-	if (typeof push_unregister === "undefined" || push_unregister==null || push_unregister=="" || push_unregister=="null" ) {
-		// do nothing
-	} else {
-		if(push_unregister==1){
-			dump("Registered again");
-			initPush(true);
-		}
-	}
-};
 
 sendPost = function(action,params){
 		
@@ -3337,9 +3211,7 @@ document.addEventListener('prechange', function(event) {
 		
 		case 1:
 		 if(current_page=="home"){
-			 raw_date=getStorage('kr_todays_date_raw');			
-			 setDuty(2);
-	         callAjax("getTaskCompleted","date="+raw_date +"&task_type=completed" );
+		 	//
 		 } else if (current_page=="profilePage") {
 		 	TransLatePage();	
 		 }
@@ -3358,18 +3230,28 @@ initBackgroundTracking = function(){
 		
 		var min_frequency = getStorage("app_track_interval");		
 		if (min_frequency<=0){
-			min_frequency=8000;
+			min_frequency=60000;
 		}
 		if (empty(min_frequency)){
-			min_frequency=8000;
+			min_frequency=60000;
 		}
 		
-		//alert("min_frequency=>"+min_frequency);
+		//dump2("min_frequency=>"+min_frequency);
 		
-		 BackgroundGeolocation.configure({
-		    locationProvider: BackgroundGeolocation.ACTIVITY_PROVIDER,	    
-		    //locationProvider: BackgroundGeolocation.DISTANCE_FILTER_PROVIDER,	    
-		    desiredAccuracy: BackgroundGeolocation.MEDIUM_ACCURACY,		    
+		if(cordova.platformId === "android"){
+			$bg_provider =  BackgroundGeolocation.ACTIVITY_PROVIDER;
+			$desired_accuracy =  BackgroundGeolocation.MEDIUM_ACCURACY;
+			$start_foreground = false;
+		} else {
+			$bg_provider =  BackgroundGeolocation.RAW_PROVIDER;
+			$desired_accuracy =  BackgroundGeolocation.LOW_ACCURACY;
+			$start_foreground = true;
+		}
+		
+		
+		 BackgroundGeolocation.configure({		    
+		    locationProvider: $bg_provider,
+		    desiredAccuracy: $desired_accuracy,
 		    stationaryRadius: 1,
 		    distanceFilter: 1,
 		    notificationTitle: getTrans("Tracking","tracking") +  "..." ,
@@ -3379,6 +3261,7 @@ initBackgroundTracking = function(){
 		    activitiesInterval: min_frequency,
 		    stopOnTerminate: true,
 		    stopOnStillActivity: false ,
+		    saveBatteryOnBackground : true, 
 		    debug: false,
 		    url : ajax_url+"/updateDriverLocation",
 		    postTemplate : {
@@ -3394,74 +3277,489 @@ initBackgroundTracking = function(){
 		    }
 		});
 		
-		BackgroundGeolocation.on('start', function() {
-		    //toastMsg('[INFO] BackgroundGeolocation service has been started');
-		    setStorage("bg_tracking",1);
-		    navigator.geolocation.clearWatch(watchID);
-		});
+		 BackgroundGeolocation.on('location', function(location) {
+		 	 
+		 	 BackgroundGeolocation.startTask(function(taskKey) {
+		 	 			 	 	 
+		 	 	 $latitude = !empty(location.latitude)?location.latitude:'';
+		 	 	 $longitude = !empty(location.longitude)?location.longitude:'';
+		 	 	 $accuracy = !empty(location.accuracy)?location.accuracy:'';
+		 	 	 $altitude = !empty(location.altitude)?location.altitude:'';
+		 	 	 
+		 	 	 params = 'lat='+ $latitude + "&lng=" + $longitude;
+			     params+="&app_version=" + app_version;	     			     
+			     params+="&accuracy="+ $accuracy;
+			     params+="&altitudeAccuracy="+ $altitude;
+			     params+="&heading="+ '';
+			     params+="&speed="+ '';
+			     params+="&track_type=location";
+			     				     
+			     callAjax2('updateDriverLocation', params);
+		 	 	
+		 	 	 BackgroundGeolocation.endTask(taskKey);
+		 	 });
+		 });
+		 
+		 BackgroundGeolocation.on('stationary', function(location) {		  		     
+		    
+		     $latitude = !empty(location.latitude)?location.latitude:'';
+	 	 	 $longitude = !empty(location.longitude)?location.longitude:'';
+	 	 	 $accuracy = !empty(location.accuracy)?location.accuracy:'';
+	 	 	 $altitude = !empty(location.altitude)?location.altitude:'';
+	 	 	 
+	 	 	 params = 'lat='+ $latitude + "&lng=" + $longitude;
+		     params+="&app_version=" + app_version;	     			     
+		     params+="&accuracy="+ $accuracy;
+		     params+="&altitudeAccuracy="+ $altitude;
+		     params+="&heading="+ '';
+		     params+="&speed="+ '';
+		     params+="&track_type=stationary";
+		     				     
+		     callAjax2('updateDriverLocation', params);
+		    
+		 });
+		 
+		 BackgroundGeolocation.on('error', function(error) {
+		    showToast('[ERROR] BackgroundGeolocation error:', error.code, error.message);
+		 });
+		 
+		 BackgroundGeolocation.on('start', function() {
+		    //showToast('[INFO] BackgroundGeolocation service has been started');
+		 });
 		
-		BackgroundGeolocation.on('stop', function() {
-	       //toastMsg('[INFO] BackgroundGeolocation service has been stopped');
-	    });
+		 BackgroundGeolocation.on('stop', function() {
+		    //showToast('[INFO] BackgroundGeolocation service has been stopped');
+		 });			
 		
-		BackgroundGeolocation.on('error', function(error) {
-	       toastMsg('[ERROR] BackgroundGeolocation error:', error.code, error.message);
-	    });
-	    
-	    BackgroundGeolocation.on('location', function(location) {    
-		    BackgroundGeolocation.startTask(function(taskKey) {	      	      		      	
-		        BackgroundGeolocation.endTask(taskKey);    
-		    });
-	    });
-	    
-	    BackgroundGeolocation.on('stationary', function(stationaryLocation) {
-	     	//toastMsg('[INFO] App is in stationary');
-	     	//alert("stationary=>"+JSON.stringify(stationaryLocation));
-	    });
-	    
-	    BackgroundGeolocation.on('abort_requested', function() {
-	    	toastMsg('[INFO] Server responded with 285 Updates Not Required');
-	    });
-	    
-	    BackgroundGeolocation.on('background', function() {
-		    //toastMsg('[INFO] App is in background');			  
-		    BackgroundGeolocation.checkStatus(function(status) {
-		    	if (!status.isRunning) {		    				    			    		
-		    		setTimeout(function() {	    	   
-			    	   BackgroundGeolocation.start();  
-			    	}, 100);
-		    	}
-		    });		    
-	    });
-    
-	    BackgroundGeolocation.on('foreground', function() {	    		    	
-	    	BackgroundGeolocation.checkStatus(function(status) {
-	    		if (status.isRunning) {
-	    			setTimeout(function() {	    	   
-			    	   BackgroundGeolocation.stop();	    	
-			    	}, 100);
-	    		}
-	    	});		    	
-	    });
-	   
-	    BackgroundGeolocation.on('authorization', function(status) {
+		  BackgroundGeolocation.on('authorization', function(status) {
 		    console.log('[INFO] BackgroundGeolocation authorization status: ' + status);
 		    if (status !== BackgroundGeolocation.AUTHORIZED) {
 		      // we need to set delay or otherwise alert may not be shown
 		      setTimeout(function() {
 		        var showSettings = confirm('App requires location tracking permission. Would you like to open app settings?');
-		        if (showSetting) {
+		        if (showSettings) {
 		          return BackgroundGeolocation.showAppSettings();
 		        }
 		      }, 1000);
 		    }
+		 });
+		 
+		BackgroundGeolocation.on('abort_requested', function() {
+			 showToast('[INFO] Server responded with 285 Updates Not Required');
 		});
 		
+		BackgroundGeolocation.on('background', function() {
+			
+			if(map_navigator==1){
+				return;
+			}
+			
+			BackgroundGeolocation.checkStatus(function(status) {
+				if (!status.isRunning) {
+					setTimeout(function() {	    	   
+				       BackgroundGeolocation.start();  
+				    }, 300);
+				}
+			});
+			
+			
+		});
 		
+		BackgroundGeolocation.on('foreground', function() {
+									
+			BackgroundGeolocation.checkStatus(function(status) {
+				if (status.isRunning) {
+					setTimeout(function() {	    	   
+				       BackgroundGeolocation.stop();				       
+				    }, 300);
+				}
+			});
+		});
   
     } catch(err) {
-       alert(err.message);   
+       dump(err.message);   
     }  
 };
 
-/*END OF SCRIPT*/
+placeholder = function(field, words , words_key){
+	$(field).attr("placeholder", getTrans(words,words_key) );
+};
+
+getParamsArray = function(){
+		
+	$params = {
+		"lang": !empty(getStorage("kr_lang_id"))?getStorage("kr_lang_id"):'' ,
+		"api_key" : krms_driver_config.APIHasKey,
+		"token" : getStorage("kr_token"),
+		"device_platform" : device_platform,
+		"device_id" : getStorage("device_id"),
+		"app_version": app_version,
+		"json":1
+	};
+	return $params;
+};
+
+runCron = function($cron_type){
+	dump("runCron=>"+ $cron_type);
+	switch ($cron_type){
+		case "foreGroundLocation":
+				   
+		   navigator.geolocation.getCurrentPosition( function(position) {	    
+		   	     
+			   	 $latitude = position.coords.latitude;
+		 	 	 $longitude = position.coords.longitude;
+		 	 	 $accuracy = position.coords.accuracy;
+		 	 	 $altitude = !empty(position.coords.altitudeAccuracy)?position.coords.altitudeAccuracy:'';
+		 	 	 $heading = !empty(position.coords.heading)?position.coords.heading:'';
+		 	 	 $speed = !empty(position.coords.speed)?position.coords.speed:'';
+		 	 	 
+		 	 	 params = 'lat='+ $latitude + "&lng=" + $longitude;
+			     params+="&app_version=" + app_version;	     			     
+			     params+="&accuracy="+ $accuracy;
+			     params+="&altitudeAccuracy="+ $altitude;
+			     params+="&heading="+ $heading;
+			     params+="&speed="+ $speed;
+			     params+="&track_type=foreground";
+			     			     				    
+			     callAjax2('updateDriverLocation', params);     
+		   	
+		      }, function(error){
+		    	 //showToast( error.message );		    	 
+		      }, 
+		      { timeout: 10000, enableHighAccuracy : getLocationAccuracy() } 
+		    );	    	  	
+		break;
+		
+		case "getNewTask":
+		   getNewTask();
+		break;
+	}
+};
+
+getNewTask = function(){
+	try {
+		
+	     params='';
+	     params+=getParams();	
+	   
+	     ajax_new_task = $.ajax({
+		  url: ajax_url+"/getNewTask",
+		  method: "post" ,
+		  data: params ,
+		  dataType: "json",
+		  timeout: ajax_timeout,
+		  crossDomain: true,
+		  beforeSend: function( xhr ) {
+		  	
+		  	 clearTimeout( timer[103] );
+		  	
+	         if(ajax_new_task != null) {		   
+	           ajax_new_task.abort();
+			 } else {    				
+				timer[103] = setTimeout(function() {		
+	         		if( ajax_new_task != null) {		
+					   ajax_new_task.abort();				   
+	         		}         		         		
+		        }, ajax_timeout ); 	
+			 }
+	      }
+	    });
+	
+	    ajax_new_task.done(function( data ) {
+	    	dump(data);
+	    	if(data.code==1){
+	    		refreshOrderTab( data.msg );
+	    	}
+	    });
+		
+		ajax_new_task.always(function() {        
+	        ajax_new_task = null;  
+	    });	
+	    
+	    ajax_new_task.fail(function( jqXHR, textStatus ) {    		    	
+	    	$text = !empty(jqXHR.responseText)?jqXHR.responseText:'';
+			if(textStatus!="abort"){
+			   showToast( textStatus + "\n" + $text );             
+			}
+	    });     
+	   
+	 } catch(err) {
+       dump(err.message);       
+    } 
+};
+
+getCurrentPage = function(){
+	return document.querySelector('ons-navigator').topPage.id;
+};
+
+q = function(data){
+	return "'" + addslashes(data) + "'";
+};
+
+var addslashes = function(str)
+{
+	return (str + '')
+    .replace(/[\\"']/g, '\\$&')
+    .replace(/\u0000/g, '\\0')
+};
+
+mapExternalDirection = function(lat,lng){
+	if(!empty(lat)){
+	   if( isDebug() ){
+	   	   toastMsg("App is in debug mode "+lat+"="+lng);
+	   } else {
+	   	
+	   	 try {
+		    	   	 	
+	        launchnavigator.isAppAvailable(launchnavigator.APP.GOOGLE_MAPS, function(isAvailable){
+				    var app;
+				    if(isAvailable){				        
+				        app = launchnavigator.APP.USER_SELECT;
+				    }else{		        
+				        app = launchnavigator.APP.USER_SELECT;
+				    }
+				    
+				    map_navigator = 1;
+				    
+				    launchnavigator.navigate( [lat, lng] , {
+				        app: app
+				    });
+				});
+			
+			} catch(err) {		
+				map_navigator = 0;
+				showToast(err.message);	    				
+			}    
+		   	
+	   }
+	} else {
+		showToast( t("Empty latitude and longititude") ,'danger');
+	}
+}
+
+refreshOrderTab = function(message){
+		
+    $current_page_id = getCurrentPage();
+	$active_tabbar = document.querySelector('ons-tabbar').getActiveTabIndex();
+		    		
+	if(!empty(message)){
+	   if(message!="push"){
+	      showToast( message ,'success');
+	   }
+	}
+	
+	setTimeout(function(){	
+	   playMedia("neworder");	    		   
+	}, 100);
+	
+	if($current_page_id=="home"){
+		setTimeout(function(){	
+			params="date="+ getStorage("kr_todays_date_raw");
+	 	    var onduty = document.getElementById('onduty').checked==true?1:2 ;	
+	 	    params+="&onduty="+onduty;
+	        AjaxTask("GetTaskByDate",params,null);
+        }, 100);
+	}  
+	
+};
+
+playMedia = function($sounds_type){
+	try {	
+		
+		 $sound_path = "";					
+		 if(cordova.platformId === "android"){
+	     	$sound_path = cordova.file.applicationDirectory + "www/sounds/"+$sounds_type+".mp3";
+	     } else if(cordova.platformId === "ios"){
+	     	$sound_path = "sounds/"+$sounds_type+".mp3";
+	     }		 			   
+		 var my_media = new Media( $sound_path ,	        
+	        function () { 
+	        	//ok
+	        },	        
+	        function (err) { 
+	        	// failed
+	        }
+	    );
+	    
+	    my_media.play({ playAudioWhenScreenIsLocked : true });
+	    my_media.setVolume(1.0);		    
+	    my_media.play();
+	    setTimeout(function(){		
+	    	my_media.stop();
+	        my_media.release();	             	    	
+	    }, 4000);
+		    
+    } catch(err) {        
+        dump(err.message);        
+    }    		
+};
+
+
+handlePushReceive = function(data){	
+	 if(cordova.platformId === "android"){
+	 	showToast( data.title+"\n"+data.body, 'success');
+     } else if(cordova.platformId === "ios"){         	
+     	showToast( data.aps.alert.title +"\n"+ data.aps.alert.body , 'success');     	
+     }
+     
+     refreshOrderTab(  'push'  );
+     
+};
+
+initSubscribe = function($value){
+	
+	$topic_new_task = getStorage("topic_new_task");
+	$topic_alert = getStorage("topic_alert");	
+	
+	//dump2($value+"=>"+$topic_new_task+"=>"+$topic_alert);
+		
+	if($value==1 && !empty($topic_new_task) && !empty($topic_alert) ){		
+		subscribe($topic_new_task);
+		setTimeout(function(){ 			 	 
+			subscribe($topic_alert); 
+        }, 200);
+	} 
+	
+	if($value!=1 && !empty($topic_new_task) && !empty($topic_alert) ){		
+		unsubscribe($topic_new_task);
+		setTimeout(function(){ 			 	 
+			unsubscribe($topic_alert); 
+        }, 200);
+	} 
+};
+
+
+completedTask = function(){
+   raw_date=getStorage('kr_todays_date_raw');
+   if ((typeof  raw_date !== "undefined") && ( raw_date !== null)) {
+	   setTimeout(function(){ 		   	  
+	   	  callAjax("getTaskCompleted","date="+raw_date +"&task_type=completed" ,'silent' );
+       }, 500);
+   }
+};
+
+
+/*START FIREBASEX  */
+initFirebasex = function(){
+	try {	
+			   
+	    window.FirebasePlugin.onMessageReceived(function(data) {
+	        try{	        	
+	        	handlePushReceive(data);
+	        }catch(e){
+	            //alert("Exception in onMessageReceived callback: "+e.data);
+	        }
+	
+	    }, function(error) {
+	        alert("Failed receiving FirebasePlugin message", error);
+	    });
+	    
+	    window.FirebasePlugin.onTokenRefresh(function(token){	        
+	        device_id = token;
+	        setStorage("device_id", token );	        
+	    }, function(error) {
+	        dump("Failed to refresh token");
+	    });
+	    	     	    
+	     checkNotificationPermission(false);	
+	     	     	     
+	     if(cordova.platformId === "android"){
+	     	initAndroid();
+	     }else if(cordova.platformId === "ios"){
+	     	initIos();
+	     }
+	    
+	} catch(err) {
+       alert(err.message);       
+    } 
+};
+
+var initIos = function(){
+    window.FirebasePlugin.onApnsTokenReceived(function(token){        
+        //
+    }, function(error) {
+        dump("Failed to receive APNS token");
+    });
+};
+
+var checkNotificationPermission = function(requested){
+    window.FirebasePlugin.hasPermission(function(hasPermission){
+        if(hasPermission){            
+            getToken();
+        }else if(!requested){            
+            window.FirebasePlugin.grantPermission(checkNotificationPermission.bind(this, true));
+        }else{            
+            alert("Notifications won't be shown as permission is denied");
+        }
+    });
+};
+
+var getToken = function(){
+    window.FirebasePlugin.getToken(function(token){        
+        device_id = token;
+        setStorage("device_id", token );        
+    }, function(error) {
+        dump("Failed to get FCM token");
+    });
+};
+
+initAndroid = function(){
+	var customChannel  = {
+		id: "Mzigo",
+		name: "Mzigo channel",
+		sound: "neworder",
+		vibration: [300, 200, 300],
+		light: true,
+	    lightColor: "0xFF0000FF",
+	    importance: 4,
+	    badge: true, 
+	    visibility: 1
+	};
+	
+	 window.FirebasePlugin.createChannel(customChannel,
+        function() {            
+            window.FirebasePlugin.listChannels(
+                function(channels) {
+                    if(typeof channels == "undefined") return;
+                    for(var i=0;i<channels.length;i++) {                        
+                    }
+                },
+                function(error) {
+                    dump('List channels error: ' + error);
+                }
+            );
+        },
+        function(error) {
+            showToast("Create channel error", error);
+        }
+    );    
+        
+};
+
+function subscribe($topic){
+	try {
+		
+	    window.FirebasePlugin.subscribe($topic, function(){
+	        //showToast("Subscribed to topic");
+	    },function(error){
+	        //showToast("Failed to subscribe to alert", error);
+	    });
+	    
+    } catch(err) {
+       dump(err.message);       
+    } 
+}
+
+function unsubscribe($topic){
+	try {
+	    window.FirebasePlugin.unsubscribe($topic, function(){
+	        //showToast("Unsubscribed from topic");
+	    },function(error){
+	        //showToast("Failed to unsubscribe from alert", error);
+	    });
+    } catch(err) {
+       dump(err.message);       
+    } 
+}
+
+/*END FIREBASEX  */

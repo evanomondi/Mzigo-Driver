@@ -1,1 +1,0 @@
-# errandsGuy, Simple, Powerful & Highly Flexible way to manage your daily errands.

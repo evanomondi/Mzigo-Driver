@@ -163,7 +163,6 @@ text-align:left;
 }
 
 .page--login-page .page__background{
-/*background:#09293A;*/
 background:#38323a;
 }
 
@@ -218,23 +217,6 @@ color:#fff;
 padding:3px 8px;
 }
 
-/*.page--login-page ons-input input.text-input--material::-moz-placeholder{ 
-color:#fff;
- }*/
-.page--login-page ons-input input.text-input--material::-webkit-input-placeholder{
-color:#fff;
-}
-.page--login-page ons-input input.text-input--material::-moz-placeholder{
-color:#fff;
-}
-.page--login-page ons-input input.text-input--material:-ms-input-placeholder
-{
-color:#fff;
-}
-
-.page--login-page ons-input .text-input__label {
-color:#009688;
-}
  
 .inner .button--material--flat,
 .button--material,
@@ -631,14 +613,14 @@ color:#fff;
 .checkbox--yellow-button .checkbox--material__input:checked + .checkbox--material__checkmark::before,
 .navigation-bar--yellow-toolbar
 {
-background:#fbd106;
+background:#2fb655;
 }
 
 
 .button--yellow-button-quiet,
 .button--yellow-button-quiet:active
 {
-color:#fbd106;
+color:#2fb655;
 }
 
 .tab-bar--yellow-tab{
@@ -749,4 +731,31 @@ color:#ccc;
 
 .tabbar--home_tab__button .tabbar__label{
 text-transform: capitalize;
+}
+
+
+/*2.0.0*/
+
+/*TOAST*/
+.toast--danger {
+  left: auto;
+  background-color: hsl(348, 100%, 61%);
+}
+
+.toast--success {
+    left: 0;
+    right: 0;
+    margin-left: auto;
+    margin-right: auto;
+    width: 250px;
+    border-radius: 30px;
+    background-color: hsl(141, 71%, 48%);
+    bottom: 10%;
+}
+.toast--success__message {
+    margin: 0;
+    text-align: center;
+}
+.toast--thick__message, .toast--thick__button {
+    font-weight: 700;
 }
